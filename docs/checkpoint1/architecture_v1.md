@@ -1,7 +1,8 @@
-# Architecture v1 
+# Architecture v1
 
 ## Diagram (high-level)
 
+```text
 Applicant / Reviewer Browser (React)
         |
         | HTTPS
@@ -18,6 +19,7 @@ Edge Function: Permit PDF + QR Generation
         |
         v
 Public Verify Endpoint (Edge Function) -> returns valid/expired/revoked
+```
 
 ## Notes
 - Two main UIs: Applicant portal and Staff portal (different roles).

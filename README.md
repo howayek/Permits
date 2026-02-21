@@ -25,12 +25,14 @@ VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
 
 Get the URL + anon key from Supabase Dashboard → **Project Settings → API**.
 
+Note: don’t leave these blank (e.g. `VITE_SUPABASE_URL=`). They must be real values.
+
 ### 3) Start the dev server
 ```bash
 npm run dev
 ```
 
-Open `http://localhost:8080`.
+Open the URL Vite prints (by default this repo uses `http://localhost:8080`).
 
 ## Key routes
 - `/`: Landing page
