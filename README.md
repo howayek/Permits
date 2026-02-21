@@ -1,4 +1,4 @@
-# Lebanon Digital Permits
+# Digital Permits
 
 End-to-end permit application UI built with React + TypeScript (Vite), styled with Tailwind + shadcn/ui, and backed by Supabase (Auth, Postgres, Storage, optional Edge Functions).
 
