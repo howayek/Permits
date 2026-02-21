@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Lebanon Digital Permits">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#004B8D"/>
+      <stop offset="1" stop-color="#1EC8A5"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#g)"/>
+  <path d="M32 14c6 6 9 11 9 16 0 8-6 14-9 20-3-6-9-12-9-20 0-5 3-10 9-16Z" fill="#fff" opacity="0.95"/>
+  <path d="M22 40h20" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
+</svg>
+

@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design system via CSS variables (HSL component values) */
+@layer base {
+  :root {
+    /* Neutrals */
+    --background: 0 0% 100%;          /* #FFFFFF */
+    --foreground: 215 25% 15%;        /* charcoal ~ #111827/#2E2E2E */
+
+    --card: 0 0% 96%;                 /* #F6F6F6 */
+    --card-foreground: 215 25% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
+
+    /* Brand */
+    --primary: 208 100% 28%;          /* #004B8D */
+    --primary-foreground: 0 0% 100%;
+
+    /* Accent for actions (mint) */
+    --secondary: 168 74% 45%;         /* #1EC8A5 (secondary util) */
+    --secondary-foreground: 0 0% 100%;
+
+    --accent: 168 74% 45%;            /* #1EC8A5 */
+    --accent-foreground: 0 0% 100%;
+
+    /* Status */
+    --success: 152 61% 41%;           /* #10B981 */
+    --success-foreground: 0 0% 100%;
+
+    --warning: 36 92% 50%;            /* #F59E0B */
+    --warning-foreground: 215 25% 15%;
+
+    --pending: 36 92% 50%;            /* same as warning for pending */
+    --pending-foreground: 215 25% 15%;
+
+    --destructive: 0 84% 63%;         /* #EF4444 */
+    --destructive-foreground: 0 0% 100%;
+
+    /* Inputs, borders, rings */
+    --border: 215 20% 88%;
+    --input: 215 20% 88%;
+    --ring: 208 100% 28%;
+
+    /* Aesthetic */
+    --radius: 0.5rem;
+
+    /* Gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(208 100% 28%), hsl(168 74% 45%));
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 96%), hsl(0 0% 100%));
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(215 25% 15% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(215 25% 15% / 0.10);
+    --shadow-lg: 0 10px 15px -3px hsl(215 25% 15% / 0.15);
+
+    /* Lebanese local accents (optional) */
+    --lebanon-cedar: 0 44% 42%;       /* #9C3D3D */
+    --lebanon-olive: 60 9% 62%;       /* #A5A58D */
+  }
+
+  .dark {
+    --background: 215 30% 8%;
+    --foreground: 0 0% 98%;
+
+    --card: 215 25% 12%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 215 25% 12%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 215 75% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 145 60% 45%;
+    --secondary-foreground: 0 0% 100%;
+
+    --accent: 145 60% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 75% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 145 60% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 45 95% 60%;
+    --warning-foreground: 215 30% 8%;
+
+    --pending: 45 70% 65%;
+    --pending-foreground: 215 30% 8%;
+
+    --border: 215 20% 20%;
+    --input: 215 20% 20%;
+    --ring: 215 75% 60%;
+
+    --gradient-hero: linear-gradient(135deg, hsl(215 75% 60%), hsl(145 65% 70%));
+    --gradient-card: linear-gradient(180deg, hsl(215 25% 12%), hsl(215 20% 15%));
+
+    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.3);
+    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.4);
+    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.5);
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground; }
+}

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.svg?v=1" type="image/svg+xml" />
+    <link rel="shortcut icon" href="/favicon.svg?v=1" />
+    <title>Lebanon Digital Permits - Transparent Permit Applications</title>
+    <meta name="description" content="Modern digital permit application system for Lebanon. Submit applications online, track progress, and eliminate corruption through transparency." />
+    <meta name="author" content="Lebanon Digital Permits" />
+
+    <meta property="og:title" content="Lebanon Digital Permits - Transparent Permit Applications" />
+    <meta property="og:description" content="Modern digital permit application system for Lebanon. Submit applications online, track progress, and eliminate corruption through transparency." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/placeholder.svg" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="/placeholder.svg" />
+  </head>
+
+  <body>
+    <div id="root">
+      <style>
+        .boot {
+          font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+          padding: 24px;
+          color: #111827;
+        }
+        .boot p { margin: 8px 0; }
+        .boot code { background: #f3f4f6; padding: 2px 6px; border-radius: 6px; }
+      </style>
+      <div class="boot">
+        <p><strong>Loading…</strong></p>
+        <p>If this stays blank, open DevTools → Console and share the first error.</p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // If the app JS crashes before React mounts, show a helpful message instead of a blank page.
+      window.__APP_MOUNTED__ = false;
+      setTimeout(function () {
+        if (window.__APP_MOUNTED__) return;
+        var root = document.getElementById("root");
+        if (!root) return;
+        // If React didn't replace the boot content, keep showing guidance.
+      }, 1500);
+    </script>
+  </body>
+</html>
