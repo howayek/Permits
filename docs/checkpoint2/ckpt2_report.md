@@ -1,6 +1,6 @@
 # Georgia Institute of Technology  
 ## CS 4365/6365: IEC — Spring 2026  
-## Project Checkpoint Report
+## Project Checkpoint 2 Report
 
 **Group:**  
 **Name:** Mark Howayek  
@@ -13,7 +13,7 @@
 ### 1.1 Point A — Current State / Context (Starting Point)
 In many countries and municipalities, permit-related processes (construction permits, driver-related permits, business permits, etc.) are still paper-first and in-person. Applicants must visit offices, submit large sets of documents, and then repeatedly follow up. Reviewers handle documents manually, approvals are difficult to track, and there is limited auditability for who accessed or approved what. This creates delays, lost documents, inconsistent decisions, and opportunities for fraud.
 
-From an enterprise computing perspective, this problem is not just “forms online.” The system must handle:
+From an enterprise computing perspective, this problem is not just "forms online." The system must handle:
 - Sensitive PII documents (IDs, certificates, proof-of-address, etc.)
 - Role-separated workflows (intake clerk vs. reviewer vs. supervisor)
 - Auditability and non-repudiation (who approved what and when)
@@ -36,7 +36,7 @@ Over the past 2 weeks, I validated these pain points with stakeholders. They wan
 ### 1.2 Point B — End-of-Semester Deliverables (What Will Be Shipped)
 
 **Deliverable D1 — Workflow-configurable permit types (Admin Console)**
-- Admin can create a permit type (e.g., “Construction Permit v1”).
+- Admin can create a permit type (e.g., "Construction Permit v1").
 - Admin can define required document checklist, form fields, and review stages.
 - Admin can configure role permissions per stage (who can review/approve/reject).
 
@@ -87,30 +87,28 @@ Because the starting problem is a paper-first and trust-lacking workflow, GovSta
 **Core stack**
 - Frontend: React + TypeScript, Tailwind, shadcn/ui, react-router-dom
 - Data fetching/state: TanStack React Query
-- Backend: Supabase (Postgres + RLS, Auth sessions, Storage, server functions for PDF/QR)
+- Backend: Supabase (Postgres + RLS, Auth sessions, Storage, Edge Functions for PDF/QR)
 - Forms/validation: react-hook-form + zod
-- Document features: PDF generation + QR generation libraries
+- Document features: pdf-lib (PDF generation) + qrcode (QR generation)
 
 **High-level architecture**
 1. Browser app for Applicants and Staff (two role-based UIs).
-2. Supabase Auth for sessions.
+2. Supabase Auth for sessions; role selection at sign-up stored in `user_roles`.
 3. Postgres schema for permit types, applications, review stages, decisions, audit events.
-4. Storage buckets for documents (private).
-5. Server-side function(s) for:
-   - generating permit PDFs,
-   - embedding QR code,
-   - computing/storing file hashes,
-   - verification endpoint for QR scans.
+4. Storage buckets for documents (uploads) and permits (generated PDFs).
+5. Edge Function for server-side permit PDF generation with QR embedding.
 
-**Data model (planned tables — draft)**
-- `users` (role metadata)
-- `permit_types` (config)
-- `permit_requirements` (required doc list per type)
-- `applications` (status, applicant_id, permit_type_id)
-- `application_documents` (file path, checksum/hash, metadata)
-- `reviews` (stage, reviewer_id, decision, comments, timestamps)
-- `audit_events` (append-only: actor, action, target, timestamp, IP/device if available)
-- `permits` (issued permit, expiry, revocation status, verification token)
+**Data model (implemented tables)**
+- `user_roles` (user_id, role as `app_role` enum: CITIZEN, GOVERNMENT, DEVELOPER, CLERK, ADMIN)
+- `municipalities` (name, contact)
+- `permit_types` (municipality_id, name, slug, form_schema JSONB, required_docs JSONB)
+- `applications` (permit_type_id, user_email, status as `app_status` enum, data JSONB)
+- `documents` (application_id, filename, s3_key, sha256, mime, size)
+- `decisions` (application_id, decision, issued_by, s3_key, sha256)
+- `audit_log` (application_id, action, meta JSONB, ip — append-only)
+- `permits` (permit_id, application_id, municipality_id, permit_type_id, status as `permit_status` enum, pdf_s3_key, qr_url, owner_name)
+- `info_requests` (application_id, requested_by, requested_fields, message, due_date)
+- `info_request_responses` (request_id, application_id, user_id, updated_fields, note)
 
 ---
 
@@ -151,17 +149,17 @@ Because the starting problem is a paper-first and trust-lacking workflow, GovSta
 
 ## 2) Current Progress Report (Match)
 
-**Work completed in the last 2 weeks (2–3 lines):**  
-Interviewed potential users/stakeholders and documented the permit workflow pain points, required document sets, and approval stages. Also produced an initial architecture sketch and identified security requirements (roles, auditability, and verification). Set up the project repository and added the initial web app codebase (React/TypeScript/Vite + UI stack). We also added Checkpoint 1 documentation (proposal + architecture + stakeholder notes) and validated the app can run locally as a baseline for the next milestone.
+**Work completed in the last 2 weeks (W7–W8):**  
+Implemented authentication with Supabase Auth, including a sign-up flow with role selection (Citizen or Government) and a database trigger that auto-assigns the selected role to `user_roles`. Built role-based route protection using a `ProtectedRoute` component—citizen routes require authentication, and government routes require the `government`, `developer`, `admin`, or `clerk` role. Scaffolded all Applicant pages (Dashboard, My Permits, Apply flow, Provide Info) and Reviewer pages (Gov Dashboard, Gov Database). Built Applicant submission v1: users can select a municipality and permit type, fill a form, attach documents (validated by MIME type and size), and submit. Documents are uploaded to Supabase Storage with client-side SHA-256 hashing; the hash and storage key are stored in the `documents` table for integrity verification. Every action (submit, route, upload) generates an immutable `audit_log` entry. Fixed status constants across the codebase to align with the actual Postgres `app_status` enum values. Cleaned up dead code (unused App.tsx, duplicate GovLogin.tsx) and added a 404 catch-all route.
 
 **Comparison vs. milestone chart:**  
-We completed the W5–W6 planning work (requirements + initial architecture + initial security needs).
+W7 (auth + roles + scaffolding) and W8 (applicant submission + document upload) are complete. We are on track with the milestone chart.
 
-**Immediate next 2 weeks (1–2 lines):**  
-Finalize MVP scope and data model, then start a minimal prototype: auth + create application + upload one document.
+**Immediate next 2 weeks (W9–W10):**  
+Build the Reviewer queue v1 with proper status transitions (Submitted → Routed → Clarification Requested → Decision Uploaded → Closed). Then implement permit issuance: on approval, generate a permit PDF with embedded QR code and a public verification endpoint.
 
 **Plan changes due to findings:**  
-We will scope the MVP to one main permit workflow (e.g., construction permit) while keeping the permit-type configuration model so the platform can generalize later.
+The database schema evolved from the original Checkpoint 1 draft to include `municipalities`, `info_requests`, and `info_request_responses` tables. The `applications` table uses a JSONB `data` column instead of fixed columns, allowing flexible form fields per permit type. Status values use Postgres enums (`app_status`, `permit_status`) instead of free-text strings, which enforces valid state transitions at the database level.
 
 ---
 
@@ -169,44 +167,58 @@ We will scope the MVP to one main permit workflow (e.g., construction permit) wh
 
 GitHub project URL: https://github.com/howayek/Permits
 
-Evidence directory: `/docs/checkpoint1/`
-- `/docs/checkpoint1/ckpt1_report.md` — checkpoint report (proposal)
-- `/docs/checkpoint1/architecture_v1.md` — simple architecture diagram + notes
+Evidence directory: `/docs/checkpoint2/`
+- `/docs/checkpoint2/ckpt2_report.md` — this checkpoint report
+- `/docs/checkpoint1/ckpt1_report.md` — original project proposal (Checkpoint 1)
+- `/docs/checkpoint1/architecture_v1.md` — architecture diagram + notes
 - `/docs/checkpoint1/stakeholder_notes.md` — anonymized stakeholder notes
-- `README.md` (how to run locally)
+- `/INSTRUCTIONS.md` — AI workflow instructions (build, run, test)
+- `README.md` — how to run locally
+
+**Key commits in this checkpoint period:**
+- Authentication with role selection and auto-assignment via database trigger
+- ProtectedRoute with optional role-based guards on all routes
+- Applicant submission flow with real document upload to Supabase Storage
+- Client-side SHA-256 hashing for document integrity
+- File validation (MIME type whitelist + 10 MB size limit)
+- Status constants aligned with Postgres `app_status` enum
+- Audit logging on submit, route, and document upload actions
 
 ---
 
 ## 4) Skill Learning Report
 
-1. **Enterprise architecture design** — We are practicing clear service boundaries (UI, auth, DB policies, storage, background jobs) and documenting tradeoffs.  
-2. **Database security with RLS** — We are learning how to enforce least-privilege authorization at the database layer, not only in frontend logic.  
-3. **Secure file handling** — We are implementing file validation, private storage access patterns, and integrity hashing for tamper detection.  
-4. **Threat modeling and auditability** — We are defining threats, mapping them to controls, and building an append-only audit log design.  
-5. **Workflow systems** — We are learning how to represent configurable review stages, queues, and decisions in a maintainable schema.  
+1. **Enterprise architecture design** — Practiced clear separation between UI, auth, database policies, storage, and background jobs. Updated the data model from a draft to a working schema with proper foreign keys and enums.
+2. **Database security with RLS** — Configured Row-Level Security policies on all tables. Learned that RLS applies to storage buckets as well (storage upload failed until a proper policy was added).
+3. **Secure file handling** — Implemented client-side SHA-256 hashing using the Web Crypto API, file type validation against a MIME whitelist, and size limits. Documents are stored with integrity hashes for tamper detection.
+4. **Role-based access control** — Built a role system using a `user_roles` table, a database trigger for auto-assignment, and a frontend `ProtectedRoute` component that gates routes by role.
+5. **Supabase Auth integration** — Learned how to pass custom metadata during sign-up (`options.data`), read it in a database trigger, and manage sessions with `onAuthStateChange`.
 
 ---
 
 ## 5) Self-Evaluation (Scope / Match / Factual)
 
 - **Scope (Plan): 115%**  
-  The project includes workflow configuration, secure document storage, RLS security, audit logs, and QR verification—beyond basic CRUD.
+  The project includes workflow configuration, secure document storage with integrity hashing, RLS security, role-based access control, audit logs, and QR verification—significantly beyond basic CRUD.
 
 - **Match: 100%**  
-  We completed the planned discovery and design work for the first checkpoint period, and have the UI running.
+  W7 and W8 milestones are complete: authentication with roles works end-to-end, all Applicant and Reviewer pages are scaffolded, and applicants can submit applications with validated document uploads.
 
-- **Factual: 90–95%**  
-  Evidence includes checkpoint documentation and a runnable UI baseline in the repo (README + docs/checkpoint1).
+- **Factual: 95%**  
+  Evidence includes the working application (runnable locally), document uploads verified in Supabase Storage with SHA-256 hashes, audit log entries, and role assignments in the database.
 
 ---
 
 ## 6) Risks and Mitigations (brief)
 
 - **Risk:** MVP becomes too broad (multiple permit types + many features).  
-  **Mitigation:** Build one fully working permit workflow first; keep configurability as a structured but limited admin feature.
+  **Mitigation:** Built one fully working permit workflow first; keep configurability as a structured but limited admin feature.
 
 - **Risk:** Security features take too long late in semester.  
-  **Mitigation:** Implement RLS + audit logging early; treat them as core, not “extra.”
+  **Mitigation:** Already implemented RLS policies on tables, role-based route guards, and file validation in W7–W8. Security is being built incrementally, not deferred.
 
 - **Risk:** Verification leaks applicant data.  
   **Mitigation:** Verification endpoint returns minimal fields (valid/expired/revoked + permit type + issue date at most).
+
+- **Risk:** Document integrity not verifiable after upload.  
+  **Mitigation:** SHA-256 hashes are computed client-side before upload and stored alongside the document metadata. Verification on download can compare hashes.

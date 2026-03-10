@@ -1,11 +1,24 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 
-export default function ProtectedRoute({ children }: { children: JSX.Element }) {
-  const { user, loading } = useAuth();   // ✅ get user from AuthProvider
+interface Props {
+  children: JSX.Element;
+  /** If provided, user must hold at least one of these roles (compared lowercase). */
+  requiredRoles?: string[];
+}
+
+export default function ProtectedRoute({ children, requiredRoles }: Props) {
+  const { user, roles, loading } = useAuth();
   const location = useLocation();
 
-  if (loading) return <div className="p-6">Loading…</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <p className="text-muted-foreground">Loading…</p>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <Navigate
@@ -14,6 +27,15 @@ export default function ProtectedRoute({ children }: { children: JSX.Element }) 
         state={{ from: location.pathname }}
       />
     );
+  }
+
+  if (requiredRoles && requiredRoles.length > 0) {
+    const hasRequiredRole = requiredRoles.some((r) =>
+      roles.includes(r.toLowerCase())
+    );
+    if (!hasRequiredRole) {
+      return <Navigate to="/dashboard" replace />;
+    }
   }
 
   return children;

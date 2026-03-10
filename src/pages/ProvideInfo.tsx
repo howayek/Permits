@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { formatFieldLabel } from "@/lib/utils";
 import { format } from "date-fns";
-import { APPLICATION_STATUSES, DECISION_STATUSES } from "@/lib/constants";
+import { APPLICATION_STATUSES, DECISION_TYPES } from "@/lib/constants";
 import { useToast } from "@/hooks/use-toast";
 
 interface Application {
@@ -98,9 +98,8 @@ export default function ProvideInfo() {
   }, [id, user, navigate]);
 
   const canProvideInfo =
-    (latestDecision ?? "").toUpperCase() === DECISION_STATUSES.REQUEST_INFO ||
-    (app?.status ?? "").toUpperCase() === DECISION_STATUSES.REQUEST_INFO ||
-    (app?.status ?? "") === APPLICATION_STATUSES.NEEDS_INFO;
+    (latestDecision ?? "").toUpperCase() === DECISION_TYPES.REQUEST_INFO ||
+    (app?.status ?? "").toUpperCase() === APPLICATION_STATUSES.CLARIFICATION_REQUESTED;
 
   const amendments: Amendment[] = Array.isArray(app?.data?.user_amendments)
     ? app!.data.user_amendments
@@ -158,7 +157,7 @@ export default function ProvideInfo() {
         .from("applications")
         .update({ 
           data: updatedData,
-          status: APPLICATION_STATUSES.SUPPLEMENTAL_SUBMITTED
+          status: APPLICATION_STATUSES.ROUTED,
         })
         .eq("id", id);
       if (updErr) throw updErr;

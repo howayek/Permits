@@ -147,7 +147,7 @@ export default function GovDashboard() {
 
   const filteredRows = useMemo(() => {
     let r = rows;
-    if (pendingOnly) r = r.filter(x => x.status === "pending");
+    if (pendingOnly) r = r.filter(x => x.status === "SUBMITTED" || x.status === "ROUTED");
     if (permitFilter) r = r.filter(x => (x.permit_types?.name ?? "") === permitFilter);
     if (search.trim()) {
       const q = search.trim().toLowerCase();

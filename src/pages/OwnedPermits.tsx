@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import QRCode from "qrcode"; // NEW
 import { GeneratePermitButton } from "@/components/GeneratePermitButton";
 import { useToast } from "@/hooks/use-toast";
-import { APPLICATION_STATUSES, DECISION_STATUSES } from "@/lib/constants";
+import { APPLICATION_STATUSES, DECISION_TYPES } from "@/lib/constants";
 
 // Application, decision, permit, and decision document types
 interface AppRow {
@@ -123,63 +123,33 @@ export default function OwnedPermits() {
     fetchPermitsData();
   }, [fetchPermitsData]);
 
-  // Expanded classification with normalization and broader approved states
   const categorized: CategorizedApp[] = useMemo(() => {
-    const APPROVED_APP_STATUSES = [
-      APPLICATION_STATUSES.APPROVED,
-      APPLICATION_STATUSES.DECISION_UPLOADED,
-      APPLICATION_STATUSES.ISSUED,
-      APPLICATION_STATUSES.PERMIT_ISSUED,
-      APPLICATION_STATUSES.GRANTED,
-    ];
-    const APPROVED_DECISIONS = [
-      DECISION_STATUSES.APPROVED,
-      DECISION_STATUSES.GRANTED,
-      DECISION_STATUSES.ACCEPTED,
-    ];
-    const DECLINED_DECISIONS = [
-      DECISION_STATUSES.DECLINED,
-      DECISION_STATUSES.REJECTED,
-    ];
-
     return apps.map(a => {
       const decisionRaw = decisions[a.id]?.decision || "";
       const decisionNorm = decisionRaw.trim().toUpperCase();
       const decision: string | null = decisionNorm || null;
 
       const appStatus = (a.status || "").trim().toUpperCase();
-      const permitStatus = (permitsByApp[a.id]?.status || "").trim().toUpperCase();
       const hasPermitPdf = Boolean(permitsByApp[a.id]?.pdf_s3_key);
 
       let phase: Phase = "PENDING";
 
       if (
-        decisionNorm === DECISION_STATUSES.REQUEST_INFO ||
-        appStatus === DECISION_STATUSES.REQUEST_INFO ||
-        appStatus === APPLICATION_STATUSES.NEEDS_INFO.toUpperCase()
+        decisionNorm === DECISION_TYPES.REQUEST_INFO ||
+        appStatus === APPLICATION_STATUSES.CLARIFICATION_REQUESTED
       ) {
         phase = "NEEDS_INFO";
       } else if (
-        APPROVED_DECISIONS.includes(decisionNorm) ||
-        APPROVED_APP_STATUSES.map(s => s.toUpperCase()).includes(appStatus) ||
-        APPROVED_APP_STATUSES.map(s => s.toUpperCase()).includes(permitStatus) ||
-        (hasPermitPdf &&
-          ![
-            DECISION_STATUSES.DECLINED,
-            DECISION_STATUSES.REJECTED,
-            DECISION_STATUSES.REQUEST_INFO,
-            APPLICATION_STATUSES.NEEDS_INFO.toUpperCase(),
-          ].includes(appStatus) &&
-          ![
-            DECISION_STATUSES.DECLINED,
-            DECISION_STATUSES.REJECTED,
-            DECISION_STATUSES.REQUEST_INFO,
-          ].includes(decisionNorm))
+        decisionNorm === DECISION_TYPES.APPROVED ||
+        appStatus === APPLICATION_STATUSES.DECISION_UPLOADED && decisionNorm === DECISION_TYPES.APPROVED ||
+        appStatus === APPLICATION_STATUSES.CLOSED && decisionNorm === DECISION_TYPES.APPROVED ||
+        hasPermitPdf
       ) {
         phase = "APPROVED";
       } else if (
-        DECLINED_DECISIONS.includes(decisionNorm) ||
-        DECLINED_DECISIONS.includes(appStatus)
+        decisionNorm === DECISION_TYPES.DECLINED ||
+        (appStatus === APPLICATION_STATUSES.DECISION_UPLOADED && decisionNorm === DECISION_TYPES.DECLINED) ||
+        (appStatus === APPLICATION_STATUSES.CLOSED && decisionNorm === DECISION_TYPES.DECLINED)
       ) {
         phase = "DECLINED";
       }
