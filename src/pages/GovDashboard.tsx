@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
-import { generatePermitForApplication } from "@/lib/PermitGenerationService";
+
 import { formatFieldLabel } from "@/lib/utils";
 import { RequestInfoModalWrapper } from "@/components/RequestInfoModalWrapper";
 
@@ -11,7 +11,7 @@ type Row = {
   status: string;
   user_email: string | null;
   created_at: string;
-  permit_types?: { name: string; slug: string; municipality_id: string } | null;
+  permit_types?: { name: string; slug: string; municipality_id: string; municipalities?: { name: string } | null } | null;
 };
 
 type DecisionType = "APPROVED" | "DECLINED" | "REQUEST_INFO";
@@ -34,7 +34,7 @@ export default function GovDashboard() {
     setFetching(true);
     const { data, error } = await supabase
       .from("applications")
-      .select("id,status,user_email,created_at,permit_types(name,slug,municipality_id)")
+      .select("id,status,user_email,created_at,permit_types(name,slug,municipality_id,municipalities(name))")
       .order("created_at", { ascending: false })
       .limit(500);
     if (error) {
@@ -55,45 +55,19 @@ export default function GovDashboard() {
     fetchApplications();
   }, [user, loading]);
 
-  async function ensureDecisionRow(applicationId: string, issuedBy: string, decision: DecisionType) {
-    const { data: existing, error: selErr } = await supabase
-      .from("decisions")
-      .select("id,s3_key,decision")
-      .eq("application_id", applicationId)
-      .order("issued_at", { ascending: false })
-      .limit(1);
-    if (selErr) throw selErr;
-
-    if (!existing?.length) {
-      const { error: insErr } = await supabase.from("decisions").insert({
-        application_id: applicationId,
-        issued_by: issuedBy,
-        issued_at: new Date().toISOString(),
-        decision,
-        note: {}
-      } as any);
-      if (insErr) throw insErr;
-    } else {
-      const row = existing[0];
-      const { error: updErr } = await supabase
-        .from("decisions")
-        .update({ decision })
-        .eq("id", row.id);
-      if (updErr) throw updErr;
-    }
-  }
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
   async function decide(id: string, decision: DecisionType) {
+    setProcessingId(id);
     try {
-      let usedRpc = false;
+      const issuedBy = user?.email ?? "unknown";
+
       const { error: rpcError } = await supabase.rpc("set_application_status", {
         p_app_id: id,
         p_status: "DECISION_UPLOADED",
         p_note: { decision },
       });
-      if (!rpcError) usedRpc = true;
-
-      if (!usedRpc) {
+      if (rpcError) {
         const { error: updateError } = await supabase
           .from("applications")
           .update({ status: "DECISION_UPLOADED" })
@@ -101,41 +75,36 @@ export default function GovDashboard() {
         if (updateError) throw updateError;
       }
 
-      const issuedBy = user?.email ?? "unknown";
-      await ensureDecisionRow(id, issuedBy, decision);
+      const { error: decErr } = await supabase.from("decisions").insert({
+        application_id: id,
+        issued_by: issuedBy,
+        issued_at: new Date().toISOString(),
+        decision,
+        note: {},
+      });
+      if (decErr) throw decErr;
 
-      const { error: logError } = await supabase.from("audit_log").insert({
+      await supabase.from("audit_log").insert({
         application_id: id,
         action: "DECISION",
         meta: { decision, by: issuedBy },
       });
-      if (logError) throw logError;
 
-      // Generate QR-coded permit if approved and none exists yet
-      if (decision === "APPROVED") {
-        const { data: existingPermit } = await supabase
-          .from("permits")
-          .select("id")
-          .eq("application_id", id)
-          .limit(1);
-        if (!existingPermit?.length) {
-          try {
-            await generatePermitForApplication(id);
-          } catch (genErr: any) {
-            console.error("Permit generation failed:", genErr);
-          }
-        }
-      }
+      toast({
+        title: decision === "APPROVED" ? "Application Approved" : "Application Declined",
+        description: `Decision recorded for application ${id.slice(0, 8)}…`,
+      });
 
-      const { data } = await supabase
-        .from("applications")
-        .select("id,status,user_email,created_at,permit_types(name,slug,municipality_id)")
-        .order("created_at", { ascending: false })
-        .limit(500);
-      setRows(data ?? []);
+      await fetchApplications();
     } catch (err: any) {
       console.error("Decision error:", err);
-      alert(err.message ?? "Failed to record decision");
+      toast({
+        title: "Error",
+        description: err.message ?? "Failed to record decision",
+        variant: "destructive",
+      });
+    } finally {
+      setProcessingId(null);
     }
   }
 
@@ -223,36 +192,39 @@ export default function GovDashboard() {
                 >
                   <Td mono>{r.id}</Td>
                   <Td>{r.user_email ?? "—"}</Td>
-                  <Td mono>{r.permit_types?.municipality_id ?? "—"}</Td>
+                  <Td>{r.permit_types?.municipalities?.name ?? "—"}</Td>
                   <Td>{r.permit_types?.name ?? "—"}</Td>
                   <Td>{r.status}</Td>
                   <Td>{new Date(r.created_at).toLocaleString()}</Td>
                   <Td>
                     <div className="flex gap-2">
                       <button
+                        disabled={processingId === r.id}
                         onClick={(e) => {
                           e.stopPropagation();
                           decide(r.id, "APPROVED");
                         }}
-                        className="px-2 py-1 bg-green-600 text-white rounded"
+                        className="px-2 py-1 bg-green-600 text-white rounded disabled:opacity-50"
                       >
-                        Approve
+                        {processingId === r.id ? "…" : "Approve"}
                       </button>
                       <button
+                        disabled={processingId === r.id}
                         onClick={(e) => {
                           e.stopPropagation();
                           decide(r.id, "DECLINED");
                         }}
-                        className="px-2 py-1 bg-red-600 text-white rounded"
+                        className="px-2 py-1 bg-red-600 text-white rounded disabled:opacity-50"
                       >
-                        Decline
+                        {processingId === r.id ? "…" : "Decline"}
                       </button>
                       <button
+                        disabled={processingId === r.id}
                         onClick={(e) => {
                           e.stopPropagation();
                           setRequestInfoAppId(r.id);
                         }}
-                        className="px-2 py-1 bg-yellow-500 text-white rounded"
+                        className="px-2 py-1 bg-yellow-500 text-white rounded disabled:opacity-50"
                       >
                         Request info
                       </button>
@@ -315,7 +287,7 @@ function DetailsModal({ id, onClose }: { id: string; onClose: () => void }) {
         ] = await Promise.all([
           supabase
             .from("applications")
-            .select("*, permit_types(name,slug,municipality_id)")
+            .select("*, permit_types(name,slug,municipality_id,municipalities(name))")
             .eq("id", id)
             .maybeSingle(),
           supabase

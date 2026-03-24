@@ -12,7 +12,7 @@ interface AppRow {
   id: string;
   status: string;
   created_at: string;
-  permit_types?: { name: string; municipality_id: string } | null;
+  permit_types?: { name: string; municipality_id: string; municipalities?: { name: string } | null } | null;
 }
 interface DecisionRow {
   application_id: string;
@@ -71,7 +71,7 @@ export default function OwnedPermits() {
       setFetching(true);
       const { data: appRows, error: appErr } = await supabase
         .from("applications")
-        .select("id,status,created_at,permit_types(name,municipality_id)")
+        .select("id,status,created_at,permit_types(name,municipality_id,municipalities(name))")
         .eq("user_email", user.email)
         .order("created_at", { ascending: false });
       if (appErr) throw appErr;
@@ -141,17 +141,22 @@ export default function OwnedPermits() {
         phase = "NEEDS_INFO";
       } else if (
         decisionNorm === DECISION_TYPES.APPROVED ||
-        appStatus === APPLICATION_STATUSES.DECISION_UPLOADED && decisionNorm === DECISION_TYPES.APPROVED ||
-        appStatus === APPLICATION_STATUSES.CLOSED && decisionNorm === DECISION_TYPES.APPROVED ||
         hasPermitPdf
       ) {
         phase = "APPROVED";
-      } else if (
-        decisionNorm === DECISION_TYPES.DECLINED ||
-        (appStatus === APPLICATION_STATUSES.DECISION_UPLOADED && decisionNorm === DECISION_TYPES.DECLINED) ||
-        (appStatus === APPLICATION_STATUSES.CLOSED && decisionNorm === DECISION_TYPES.DECLINED)
-      ) {
+      } else if (decisionNorm === DECISION_TYPES.DECLINED) {
         phase = "DECLINED";
+      } else if (
+        appStatus === APPLICATION_STATUSES.DECISION_UPLOADED ||
+        appStatus === APPLICATION_STATUSES.CLOSED
+      ) {
+        // Status says a decision was made but we have the decision row — classify by it.
+        // If decision row is missing (RLS or timing), show as "decided" with the decision text.
+        if (decisionNorm) {
+          phase = decisionNorm === DECISION_TYPES.DECLINED ? "DECLINED" : "APPROVED";
+        } else {
+          phase = "APPROVED";
+        }
       }
 
       return { ...a, phase, decision };
@@ -300,7 +305,7 @@ export default function OwnedPermits() {
                   <tr key={a.id} className="border-t">
                     <td className="px-3 py-2 font-mono text-xs">{a.id}</td>
                     <td className="px-3 py-2">{a.permit_types?.name ?? "—"}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{a.permit_types?.municipality_id ?? "—"}</td>
+                    <td className="px-3 py-2">{a.permit_types?.municipalities?.name ?? "—"}</td>
                     <td className="px-3 py-2">{phaseBadge(a.phase)}</td>
                     <td className="px-3 py-2">
                       {a.phase === "APPROVED" && qrPreview ? (

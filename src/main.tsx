@@ -7,6 +7,7 @@ import { AuthProvider } from "@/lib/auth";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
 import ProtectedRoute from "@/components/ui/ProtectedRoute";
 import Header from "@/components/ui/Header";
+import { Toaster } from "@/components/ui/toaster";
 
 import Index from "@/pages/Index";
 import AuthLogin from "@/pages/AuthLogin";
@@ -31,6 +32,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <BrowserRouter>
         <AuthProvider>
           <QueryClientProvider client={queryClient}>
+            <Toaster />
             <Header />
             <Routes>
               {/* ── Public ─────────────────────────────────── */}

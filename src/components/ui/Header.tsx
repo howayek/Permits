@@ -4,13 +4,10 @@ import { supabase, SUPABASE_CONFIGURED } from "@/lib/supabase";
 import { Button } from "./button";
 
 export default function Header() {
-  const { user, roles, loading } = useAuth();
+  const { user, isGovernment, isDeveloper, loading } = useAuth();
 
-  const isGovOrAdmin =
-    roles.includes("government") ||
-    roles.includes("developer") ||
-    roles.includes("admin") ||
-    roles.includes("clerk");
+  const showGovLinks = isGovernment || isDeveloper;
+  const showCitizenLinks = user && !isGovernment;
 
   async function handleSignOut() {
     const { error } = await supabase.auth.signOut();
@@ -35,30 +32,32 @@ export default function Header() {
         </Link>
 
         <nav className="flex items-center gap-3">
-          <Link to="/apply" className="text-sm hover:underline">
-            Apply
-          </Link>
-
-          {user && (
+          {showCitizenLinks && (
             <>
+              <Link to="/apply" className="text-sm hover:underline">
+                Apply
+              </Link>
               <Link to="/my-permits" className="text-sm hover:underline">
                 My Permits
-              </Link>
-              <Link to="/dashboard" className="text-sm hover:underline">
-                Dashboard
               </Link>
             </>
           )}
 
-          {user && isGovOrAdmin && (
+          {user && (
+            <Link to="/dashboard" className="text-sm hover:underline">
+              Dashboard
+            </Link>
+          )}
+
+          {user && showGovLinks && (
             <>
               <Link to="/gov">
                 <Button variant="outline" size="sm">
-                  Government portal
+                  Review Queue
                 </Button>
               </Link>
               <Link to="/gov/database" className="text-sm hover:underline">
-                Gov Database
+                Applications
               </Link>
             </>
           )}

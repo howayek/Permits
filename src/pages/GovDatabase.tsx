@@ -12,7 +12,7 @@ type Row = {
   status: string;
   user_email: string | null;
   created_at: string;
-  permit_types?: { name: string; slug: string; municipality_id: string } | null;
+  permit_types?: { name: string; slug: string; municipality_id: string; municipalities?: { name: string } | null } | null;
 };
 
 export default function GovDatabase() {
@@ -22,7 +22,7 @@ export default function GovDatabase() {
   const [search, setSearch] = useState("");
   const [municipality, setMunicipality] = useState("");
   const [permit, setPermit] = useState("");
-  const [status, setStatus] = useState<"approved" | "pending" | "all">("approved");
+  const [status, setStatus] = useState<string>("all");
   const [oldestPendingFirst, setOldestPendingFirst] = useState(false);
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
 
@@ -33,7 +33,7 @@ export default function GovDatabase() {
         setFetching(true);
         const { data, error } = await supabase
           .from("applications")
-          .select("id,status,user_email,created_at,permit_types(name,slug,municipality_id)")
+          .select("id,status,user_email,created_at,permit_types(name,slug,municipality_id,municipalities(name))")
           .order("created_at", { ascending: false })
           .limit(5000);
         if (error) throw error;
@@ -50,11 +50,11 @@ export default function GovDatabase() {
   const filtered = useMemo(() => {
     let r = rows;
     if (status !== "all") {
-      r = r.filter((x) => (status === "approved" ? x.status === "approved" : x.status === "pending"));
+      r = r.filter((x) => x.status === status);
     }
     if (municipality.trim()) {
       const q = municipality.trim().toLowerCase();
-      r = r.filter((x) => (x.permit_types?.municipality_id ?? "").toLowerCase().includes(q));
+      r = r.filter((x) => (x.permit_types?.municipalities?.name ?? "").toLowerCase().includes(q));
     }
     if (permit.trim()) {
       const q = permit.trim().toLowerCase();
@@ -84,10 +84,13 @@ export default function GovDatabase() {
         <input className="border rounded px-3 py-2" placeholder="Search id, email, permit…" value={search} onChange={(e) => setSearch(e.target.value)} />
         <input className="border rounded px-3 py-2" placeholder="Municipality id" value={municipality} onChange={(e) => setMunicipality(e.target.value)} />
         <input className="border rounded px-3 py-2" placeholder="Permit type" value={permit} onChange={(e) => setPermit(e.target.value)} />
-        <select className="border rounded px-3 py-2" value={status} onChange={(e) => setStatus(e.target.value as "approved" | "pending" | "all")}>
-          <option value="approved">Approved</option>
-          <option value="pending">Pending</option>
-          <option value="all">All</option>
+        <select className="border rounded px-3 py-2" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="all">All statuses</option>
+          <option value="SUBMITTED">Submitted</option>
+          <option value="ROUTED">Routed</option>
+          <option value="CLARIFICATION_REQUESTED">Clarification Requested</option>
+          <option value="DECISION_UPLOADED">Decision Uploaded</option>
+          <option value="CLOSED">Closed</option>
         </select>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={oldestPendingFirst} onChange={(e) => setOldestPendingFirst(e.target.checked)} />
@@ -117,7 +120,7 @@ export default function GovDatabase() {
                 <tr key={r.id} className="border-t hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedAppId(r.id)}>
                   <td className="px-3 py-2 font-mono text-xs">{r.id}</td>
                   <td className="px-3 py-2">{r.user_email ?? "—"}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{r.permit_types?.municipality_id ?? "—"}</td>
+                  <td className="px-3 py-2">{r.permit_types?.municipalities?.name ?? "—"}</td>
                   <td className="px-3 py-2">{r.permit_types?.name ?? "—"}</td>
                   <td className="px-3 py-2">{r.status}</td>
                   <td className="px-3 py-2">{new Date(r.created_at).toLocaleString()}</td>
@@ -156,7 +159,7 @@ function DetailsModal({ id, onClose }: { id: string; onClose: () => void }) {
         ] = await Promise.all([
           supabase
             .from("applications")
-            .select("*, permit_types(name,slug,municipality_id)")
+            .select("*, permit_types(name,slug,municipality_id,municipalities(name))")
             .eq("id", id)
             .maybeSingle(),
           supabase
@@ -395,11 +398,11 @@ function DetailsModal({ id, onClose }: { id: string; onClose: () => void }) {
                 <Button
                   variant="outline"
                   onClick={() => setShowRequestInfoModal(true)}
-                  disabled={app?.status === APPLICATION_STATUSES.NEEDS_INFO}
+                  disabled={app?.status === APPLICATION_STATUSES.CLARIFICATION_REQUESTED}
                 >
                   Request Info
                 </Button>
-                {app?.status === APPLICATION_STATUSES.NEEDS_INFO && (
+                {app?.status === APPLICATION_STATUSES.CLARIFICATION_REQUESTED && (
                   <p className="text-xs text-orange-600 mt-2">
                     Information already requested for this application.
                   </p>
@@ -460,7 +463,7 @@ function DetailsModal({ id, onClose }: { id: string; onClose: () => void }) {
               try {
                 const { data, error } = await supabase
                   .from("applications")
-                  .select("*, permit_types(name,slug,municipality_id)")
+                  .select("*, permit_types(name,slug,municipality_id,municipalities(name))")
                   .eq("id", id)
                   .maybeSingle();
                 if (!error && data) {
