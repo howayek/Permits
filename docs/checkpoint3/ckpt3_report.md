@@ -176,7 +176,7 @@ Evidence directory: `/docs/checkpoint3/`
 - `/docs/checkpoint1/architecture_v1.md` — architecture diagram + notes
 - `/docs/checkpoint1/stakeholder_notes.md` — anonymized stakeholder notes
 - `/INSTRUCTIONS.md` — AI workflow instructions (build, run, test)
-- `/CLAUDE.md` — project memory file for AI assistants
+
 - `README.md` — how to run locally
 
 **Key commits in this checkpoint period:**
