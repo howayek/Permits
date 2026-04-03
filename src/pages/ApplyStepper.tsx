@@ -6,7 +6,7 @@ import { ALLOWED_DOC_MIME_TYPES, MAX_DOC_SIZE_BYTES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
-type PermitType = { id: string; name: string; slug: string };
+type PermitType = { id: string; name: string; slug: string; required_docs: string[] };
 type Muni = { id: string; name: string };
 
 interface UploadedDoc {
@@ -64,7 +64,7 @@ export default function ApplyStepper() {
 
         const { data: pt, error: ept } = await supabase
           .from("permit_types")
-          .select("id,name,slug")
+          .select("id,name,slug,required_docs")
           .eq("municipality_id", m.id)
           .eq("slug", permitType)
           .maybeSingle();
@@ -317,9 +317,19 @@ export default function ApplyStepper() {
           </div>
         </div>
 
-        <Card className="p-4 space-y-2">
+        <Card className="p-4 space-y-3">
+          {ptype?.required_docs && ptype.required_docs.length > 0 && (
+            <div>
+              <label className="block text-sm font-semibold mb-1">Required Documents</label>
+              <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-0.5">
+                {ptype.required_docs.map((doc, i) => (
+                  <li key={i}>{doc}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <label className="block text-sm font-medium">
-            Documents{" "}
+            Upload Documents{" "}
             <span className="text-muted-foreground font-normal">
               (PDF, JPEG, PNG, WebP, DOC/DOCX — max 10 MB each)
             </span>

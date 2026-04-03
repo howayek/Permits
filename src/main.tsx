@@ -19,6 +19,7 @@ import OwnedPermits from "@/pages/OwnedPermits";
 import ProvideInfo from "@/pages/ProvideInfo";
 import GovDashboard from "@/pages/GovDashboard";
 import GovDatabase from "@/pages/GovDatabase";
+import GovAdmin from "@/pages/GovAdmin";
 import VerifyPermit from "@/pages/VerifyPermit";
 import NotFound from "@/pages/NotFound";
 
@@ -89,6 +90,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 element={
                   <ProtectedRoute requiredRoles={["government", "developer", "admin", "clerk"]}>
                     <GovDatabase />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/gov/admin"
+                element={
+                  <ProtectedRoute requiredRoles={["government", "developer", "admin"]}>
+                    <GovAdmin />
                   </ProtectedRoute>
                 }
               />

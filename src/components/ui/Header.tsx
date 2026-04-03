@@ -59,6 +59,9 @@ export default function Header() {
               <Link to="/gov/database" className="text-sm hover:underline">
                 Applications
               </Link>
+              <Link to="/gov/admin" className="text-sm hover:underline">
+                Admin
+              </Link>
             </>
           )}
 

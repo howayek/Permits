@@ -2,7 +2,7 @@ import DeveloperDashboard from "@/pages/DeveloperDashboard";
 import { useAuth } from "@/lib/auth";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
-import { FileText, Shield, ClipboardList, Database } from "lucide-react";
+import { FileText, Shield, ClipboardList, Database, Settings } from "lucide-react";
 
 export default function Dashboard() {
   const { user, isDeveloper, isGovernment, loading } = useAuth();
@@ -49,6 +49,13 @@ export default function Dashboard() {
               description="Search and filter all applications across municipalities and permit types."
               href="/gov/database"
               linkText="Open database"
+            />
+            <DashCard
+              icon={<Settings className="w-6 h-6 text-primary" />}
+              title="Admin Configuration"
+              description="Create municipalities, define permit types, and set required documents."
+              href="/gov/admin"
+              linkText="Open admin"
             />
           </div>
         </section>
