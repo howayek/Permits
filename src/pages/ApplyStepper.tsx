@@ -41,6 +41,8 @@ export default function ApplyStepper() {
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [aiResults, setAiResults] = useState<Record<number, DocumentClassification | null>>({});
+  const [aiLoading, setAiLoading] = useState<Record<number, boolean>>({});
+  const [overrideAiWarnings, setOverrideAiWarnings] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -108,10 +110,34 @@ export default function ApplyStepper() {
     setFileErrors(validateFiles(selected));
     setFileAssignments({});
     setAiResults({});
+    setAiLoading({});
+    setOverrideAiWarnings(false);
   }
 
-  function handleAssignmentChange(index: number, expectedDoc: string) {
+  async function handleAssignmentChange(index: number, expectedDoc: string) {
     setFileAssignments((prev) => ({ ...prev, [index]: expectedDoc }));
+
+    // Clear previous result for this file
+    setAiResults((prev) => ({ ...prev, [index]: null }));
+
+    if (!expectedDoc || expectedDoc === "Other") {
+      // No verification needed for "Other" or empty
+      return;
+    }
+
+    const file = files[index];
+    if (!file) return;
+
+    setAiLoading((prev) => ({ ...prev, [index]: true }));
+    try {
+      const result = await classifyDocument(file, expectedDoc);
+      setAiResults((prev) => ({ ...prev, [index]: result }));
+    } catch (e) {
+      console.warn("AI classification failed:", e);
+      setAiResults((prev) => ({ ...prev, [index]: null }));
+    } finally {
+      setAiLoading((prev) => ({ ...prev, [index]: false }));
+    }
   }
 
   async function computeSHA256(file: File): Promise<string> {
@@ -142,14 +168,9 @@ export default function ApplyStepper() {
         .upload(s3Key, f, { cacheControl: "3600", upsert: false });
       if (upErr) throw new Error(`Failed to upload "${f.name}": ${upErr.message}`);
 
-      // AI classification (best-effort; failures don't block submission)
+      // AI classification was already done at dropdown-pick time — reuse cached result
       const expectedDoc = fileAssignments[i];
-      let aiClassification: DocumentClassification | null = null;
-      if (expectedDoc) {
-        setUploadProgress(`Verifying "${f.name}" with AI…`);
-        aiClassification = await classifyDocument(f, expectedDoc);
-        setAiResults((prev) => ({ ...prev, [i]: aiClassification }));
-      }
+      const aiClassification = aiResults[i] ?? null;
 
       uploaded.push({
         name: f.name,
@@ -395,6 +416,7 @@ export default function ApplyStepper() {
               {files.map((f, i) => {
                 const assignment = fileAssignments[i] ?? "";
                 const aiResult = aiResults[i];
+                const isVerifying = aiLoading[i];
                 return (
                   <div key={i} className="border rounded p-3 space-y-2 bg-muted/30">
                     <div className="flex items-center justify-between gap-2">
@@ -414,6 +436,7 @@ export default function ApplyStepper() {
                           className="border rounded-md p-1.5 text-sm w-full"
                           value={assignment}
                           onChange={(e) => handleAssignmentChange(i, e.target.value)}
+                          disabled={isVerifying}
                         >
                           <option value="">— Select document type —</option>
                           {ptype.required_docs.map((doc) => (
@@ -425,7 +448,12 @@ export default function ApplyStepper() {
                         </select>
                       </div>
                     )}
-                    {aiResult && (
+                    {isVerifying && (
+                      <div className="text-xs rounded p-2 bg-blue-50 text-blue-800 border border-blue-200">
+                        <span className="font-semibold">⟳ Verifying with AI…</span> Please wait.
+                      </div>
+                    )}
+                    {!isVerifying && aiResult && (
                       <div
                         className={`text-xs rounded p-2 ${
                           aiResult.match
@@ -465,13 +493,70 @@ export default function ApplyStepper() {
           </div>
         )}
 
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={submitting || fileErrors.length > 0}
-        >
-          {submitting ? "Submitting…" : "Submit application"}
-        </Button>
+        {(() => {
+          const aiStillVerifying = Object.values(aiLoading).some(Boolean);
+          const aiFlaggedFiles = files
+            .map((_, i) => ({ idx: i, result: aiResults[i] }))
+            .filter((x) => x.result && !x.result.match);
+          const filesNeedingAssignment = files
+            .map((_, i) => i)
+            .filter(
+              (i) =>
+                !fileAssignments[i] &&
+                ptype?.required_docs &&
+                ptype.required_docs.length > 0
+            );
+
+          const blockReasons: string[] = [];
+          if (aiStillVerifying) blockReasons.push("AI verification in progress…");
+          if (filesNeedingAssignment.length > 0)
+            blockReasons.push(
+              `Please pick a document type for ${filesNeedingAssignment.length} file(s).`
+            );
+          if (aiFlaggedFiles.length > 0 && !overrideAiWarnings)
+            blockReasons.push(
+              `${aiFlaggedFiles.length} file(s) flagged by AI. Re-pick the correct type or check the override box.`
+            );
+
+          return (
+            <>
+              {aiFlaggedFiles.length > 0 && (
+                <label className="flex items-start gap-2 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded p-3">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={overrideAiWarnings}
+                    onChange={(e) => setOverrideAiWarnings(e.target.checked)}
+                  />
+                  <span>
+                    I understand the AI flagged some of my documents but I want to submit anyway.
+                    A government reviewer will verify them manually.
+                  </span>
+                </label>
+              )}
+
+              {blockReasons.length > 0 && (
+                <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-0.5">
+                  {blockReasons.map((r, i) => (
+                    <li key={i}>{r}</li>
+                  ))}
+                </ul>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={
+                  submitting ||
+                  fileErrors.length > 0 ||
+                  blockReasons.length > 0
+                }
+              >
+                {submitting ? "Submitting…" : "Submit application"}
+              </Button>
+            </>
+          );
+        })()}
       </form>
     </main>
   );

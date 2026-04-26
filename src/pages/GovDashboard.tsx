@@ -321,6 +321,10 @@ function DetailsModal({ id, onClose }: { id: string; onClose: () => void }) {
         };
       });
 
+      const requiredDocs: string[] = Array.isArray(app.permit_types?.required_docs)
+        ? (app.permit_types.required_docs as string[])
+        : [];
+
       const result = await generateReviewSummary({
         permit_type_name: app.permit_types?.name,
         municipality_name: app.permit_types?.municipalities?.name,
@@ -328,7 +332,7 @@ function DetailsModal({ id, onClose }: { id: string; onClose: () => void }) {
         status: app.status,
         form_fields: app.data?.fields,
         documents: docsForSummary,
-        required_docs: [],
+        required_docs: requiredDocs,
       });
 
       if (!result) {
@@ -356,7 +360,7 @@ function DetailsModal({ id, onClose }: { id: string; onClose: () => void }) {
         ] = await Promise.all([
           supabase
             .from("applications")
-            .select("*, permit_types(name,slug,municipality_id,municipalities(name))")
+            .select("*, permit_types(name,slug,municipality_id,required_docs,municipalities(name))")
             .eq("id", id)
             .maybeSingle(),
           supabase
