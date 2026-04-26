@@ -5,6 +5,8 @@ import { useToast } from "@/hooks/use-toast";
 
 import { formatFieldLabel } from "@/lib/utils";
 import { RequestInfoModalWrapper } from "@/components/RequestInfoModalWrapper";
+import { generateReviewSummary } from "@/lib/aiAssist";
+import { Button } from "@/components/ui/button";
 
 type Row = {
   id: string;
@@ -197,38 +199,54 @@ export default function GovDashboard() {
                   <Td>{r.status}</Td>
                   <Td>{new Date(r.created_at).toLocaleString()}</Td>
                   <Td>
-                    <div className="flex gap-2">
-                      <button
-                        disabled={processingId === r.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          decide(r.id, "APPROVED");
-                        }}
-                        className="px-2 py-1 bg-green-600 text-white rounded disabled:opacity-50"
-                      >
-                        {processingId === r.id ? "…" : "Approve"}
-                      </button>
-                      <button
-                        disabled={processingId === r.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          decide(r.id, "DECLINED");
-                        }}
-                        className="px-2 py-1 bg-red-600 text-white rounded disabled:opacity-50"
-                      >
-                        {processingId === r.id ? "…" : "Decline"}
-                      </button>
-                      <button
-                        disabled={processingId === r.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setRequestInfoAppId(r.id);
-                        }}
-                        className="px-2 py-1 bg-yellow-500 text-white rounded disabled:opacity-50"
-                      >
-                        Request info
-                      </button>
-                    </div>
+                    {r.status === "SUBMITTED" || r.status === "ROUTED" ? (
+                      <div className="flex gap-2">
+                        <button
+                          disabled={processingId === r.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            decide(r.id, "APPROVED");
+                          }}
+                          className="px-2 py-1 bg-green-600 text-white rounded disabled:opacity-50"
+                        >
+                          {processingId === r.id ? "…" : "Approve"}
+                        </button>
+                        <button
+                          disabled={processingId === r.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            decide(r.id, "DECLINED");
+                          }}
+                          className="px-2 py-1 bg-red-600 text-white rounded disabled:opacity-50"
+                        >
+                          {processingId === r.id ? "…" : "Decline"}
+                        </button>
+                        <button
+                          disabled={processingId === r.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRequestInfoAppId(r.id);
+                          }}
+                          className="px-2 py-1 bg-yellow-500 text-white rounded disabled:opacity-50"
+                        >
+                          Request info
+                        </button>
+                      </div>
+                    ) : r.status === "CLARIFICATION_REQUESTED" ? (
+                      <span className="text-xs px-2 py-1 rounded bg-orange-100 text-orange-800">
+                        Awaiting citizen
+                      </span>
+                    ) : r.status === "DECISION_UPLOADED" ? (
+                      <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800">
+                        Decision recorded
+                      </span>
+                    ) : r.status === "CLOSED" ? (
+                      <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">
+                        Closed
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">—</span>
+                    )}
                   </Td>
                 </tr>
               ))}
@@ -275,6 +293,57 @@ function DetailsModal({ id, onClose }: { id: string; onClose: () => void }) {
   const [events, setEvents] = useState<any[]>([]);
   const [decisionFile, setDecisionFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  async function generateAiSummary() {
+    if (!app) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const aiResults = (app.data?.ai_results ?? []) as Array<{
+        filename: string;
+        s3_key: string;
+        expected_doc: string | null;
+        classification: any;
+      }>;
+
+      const docsForSummary = docs.map((d) => {
+        const aiMatch = aiResults.find((r) => r.s3_key === d.s3_key);
+        return {
+          filename: d.filename,
+          mime: d.mime,
+          size: d.size,
+          ai_classification: aiMatch?.classification
+            ? { ...aiMatch.classification, expected_doc: aiMatch.expected_doc ?? "" }
+            : null,
+        };
+      });
+
+      const result = await generateReviewSummary({
+        permit_type_name: app.permit_types?.name,
+        municipality_name: app.permit_types?.municipalities?.name,
+        user_email: app.user_email,
+        status: app.status,
+        form_fields: app.data?.fields,
+        documents: docsForSummary,
+        required_docs: [],
+      });
+
+      if (!result) {
+        setAiError(
+          "AI summary unavailable. Make sure the ai-assist Edge Function is deployed and OPENAI_API_KEY is set."
+        );
+        return;
+      }
+      setAiSummary(result.summary);
+    } catch (e: any) {
+      setAiError(e?.message ?? "Failed to generate summary");
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -410,6 +479,18 @@ function DetailsModal({ id, onClose }: { id: string; onClose: () => void }) {
       }
       const { data, error } = await supabase.storage.from("documents").download(doc.s3_key);
       if (error) throw error;
+
+      if (doc.sha256) {
+        const { verifyIntegrity } = await import("@/lib/integrity");
+        const result = await verifyIntegrity(data, doc.sha256);
+        if (!result.ok) {
+          alert(
+            `Integrity check FAILED.\nExpected: ${result.expected}\nActual: ${result.actual}\n\nThe file may have been tampered with. Open blocked.`
+          );
+          return;
+        }
+      }
+
       const url = URL.createObjectURL(data);
       window.open(url);
     } catch (err: any) {
@@ -462,23 +543,82 @@ function DetailsModal({ id, onClose }: { id: string; onClose: () => void }) {
                   <div className="text-sm text-muted-foreground">No additional application details.</div>
                 )}
               </section>
+
+              {/* ── AI Review Assistant ─────────────────────────── */}
+              <section className="rounded border border-purple-200 bg-purple-50/40 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-semibold flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 bg-purple-500 rounded-full" />
+                    AI Review Summary
+                  </h4>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={generateAiSummary}
+                    disabled={aiLoading}
+                  >
+                    {aiLoading ? "Analyzing…" : aiSummary ? "Regenerate" : "Generate Summary"}
+                  </Button>
+                </div>
+                {aiError && (
+                  <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2 mb-2">
+                    {aiError}
+                  </div>
+                )}
+                {aiSummary ? (
+                  <div className="text-sm whitespace-pre-wrap">{aiSummary}</div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Click "Generate Summary" for an AI-assisted review of this application's
+                    completeness and document validity. The reviewer makes the final decision.
+                  </p>
+                )}
+              </section>
+
               <section>
                 <h4 className="font-semibold mb-2">Files</h4>
                 {docs.length === 0 ? (
                   <div className="text-sm text-muted-foreground">No files uploaded.</div>
                 ) : (
                   <ul className="space-y-2">
-                    {docs.map((d) => (
-                      <li key={d.s3_key} className="flex items-center justify-between border rounded p-2">
-                        <div>
-                          <div className="font-medium">{d.filename}</div>
-                          <div className="text-xs text-muted-foreground">{d.mime} · {d.size} bytes</div>
-                        </div>
-                        <div>
-                          <button onClick={() => downloadDoc(d)} className="px-2 py-1 border rounded text-sm">View</button>
-                        </div>
-                      </li>
-                    ))}
+                    {docs.map((d) => {
+                      const aiResults = (app?.data?.ai_results ?? []) as Array<any>;
+                      const aiMatch = aiResults.find((r) => r.s3_key === d.s3_key);
+                      const cls = aiMatch?.classification;
+                      return (
+                        <li key={d.s3_key} className="border rounded p-2 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-medium">{d.filename}</div>
+                              <div className="text-xs text-muted-foreground">{d.mime} · {d.size} bytes</div>
+                              {aiMatch?.expected_doc && (
+                                <div className="text-xs text-muted-foreground">
+                                  Claimed type: <span className="font-medium">{aiMatch.expected_doc}</span>
+                                </div>
+                              )}
+                            </div>
+                            <button onClick={() => downloadDoc(d)} className="px-2 py-1 border rounded text-sm">View</button>
+                          </div>
+                          {cls && (
+                            <div
+                              className={`text-xs rounded p-1.5 ${
+                                cls.match
+                                  ? "bg-green-50 text-green-800"
+                                  : "bg-amber-50 text-amber-800"
+                              }`}
+                            >
+                              {cls.match ? "✓ AI verified" : "⚠ AI flagged"} — {cls.notes}
+                              {!cls.match && cls.actual_type && (
+                                <> · appears to be: <em>{cls.actual_type}</em></>
+                              )}
+                              {typeof cls.confidence === "number" && (
+                                <> · confidence: {(cls.confidence * 100).toFixed(0)}%</>
+                              )}
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </section>

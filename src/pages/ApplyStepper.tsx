@@ -5,6 +5,7 @@ import { createApplication } from "@/lib/db";
 import { ALLOWED_DOC_MIME_TYPES, MAX_DOC_SIZE_BYTES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { classifyDocument, type DocumentClassification } from "@/lib/aiAssist";
 
 type PermitType = { id: string; name: string; slug: string; required_docs: string[] };
 type Muni = { id: string; name: string };
@@ -15,6 +16,8 @@ interface UploadedDoc {
   type: string;
   sha256: string;
   s3Key: string;
+  ai_classification?: DocumentClassification | null;
+  expected_doc?: string;
 }
 
 export default function ApplyStepper() {
@@ -33,9 +36,11 @@ export default function ApplyStepper() {
   const [plotNumber, setPlotNumber] = useState("");
   const [description, setDescription] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [fileAssignments, setFileAssignments] = useState<Record<number, string>>({});
   const [fileErrors, setFileErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const [aiResults, setAiResults] = useState<Record<number, DocumentClassification | null>>({});
 
   useEffect(() => {
     (async () => {
@@ -101,6 +106,12 @@ export default function ApplyStepper() {
     const selected = e.target.files ? Array.from(e.target.files) : [];
     setFiles(selected);
     setFileErrors(validateFiles(selected));
+    setFileAssignments({});
+    setAiResults({});
+  }
+
+  function handleAssignmentChange(index: number, expectedDoc: string) {
+    setFileAssignments((prev) => ({ ...prev, [index]: expectedDoc }));
   }
 
   async function computeSHA256(file: File): Promise<string> {
@@ -131,12 +142,23 @@ export default function ApplyStepper() {
         .upload(s3Key, f, { cacheControl: "3600", upsert: false });
       if (upErr) throw new Error(`Failed to upload "${f.name}": ${upErr.message}`);
 
+      // AI classification (best-effort; failures don't block submission)
+      const expectedDoc = fileAssignments[i];
+      let aiClassification: DocumentClassification | null = null;
+      if (expectedDoc) {
+        setUploadProgress(`Verifying "${f.name}" with AI…`);
+        aiClassification = await classifyDocument(f, expectedDoc);
+        setAiResults((prev) => ({ ...prev, [i]: aiClassification }));
+      }
+
       uploaded.push({
         name: f.name,
         size: f.size,
         type: f.type,
         sha256,
         s3Key,
+        ai_classification: aiClassification,
+        expected_doc: expectedDoc,
       });
     }
 
@@ -178,7 +200,7 @@ export default function ApplyStepper() {
         documents: [],
       });
 
-      // Step 2: Upload files to Storage with SHA-256 hashing
+      // Step 2: Upload files to Storage with SHA-256 hashing + AI classification
       if (files.length > 0) {
         const uploadedDocs = await uploadFiles(appId);
 
@@ -194,7 +216,31 @@ export default function ApplyStepper() {
         const { error: docErr } = await supabase.from("documents").insert(docRows);
         if (docErr) throw new Error(`Document records failed: ${docErr.message}`);
 
-        // Audit the upload
+        // Persist AI classifications inside applications.data.ai_results so the
+        // government reviewer can access them later without re-running the AI.
+        const aiResultsArr = uploadedDocs
+          .filter((d) => d.ai_classification || d.expected_doc)
+          .map((d) => ({
+            filename: d.name,
+            s3_key: d.s3Key,
+            expected_doc: d.expected_doc ?? null,
+            classification: d.ai_classification ?? null,
+          }));
+
+        if (aiResultsArr.length > 0) {
+          const { data: appRow } = await supabase
+            .from("applications")
+            .select("data")
+            .eq("id", appId)
+            .maybeSingle();
+          const existingData = (appRow?.data as Record<string, unknown>) ?? {};
+          await supabase
+            .from("applications")
+            .update({ data: { ...existingData, ai_results: aiResultsArr } })
+            .eq("id", appId);
+        }
+
+        // Audit the upload (including AI summary)
         await supabase.from("audit_log").insert({
           application_id: appId,
           action: "DOCUMENTS_UPLOADED",
@@ -205,6 +251,8 @@ export default function ApplyStepper() {
               size: d.size,
               sha256: d.sha256,
               s3_key: d.s3Key,
+              ai_match: d.ai_classification?.match ?? null,
+              expected_doc: d.expected_doc ?? null,
             })),
           },
         });
@@ -343,13 +391,63 @@ export default function ApplyStepper() {
           />
 
           {files.length > 0 && fileErrors.length === 0 && (
-            <ul className="mt-2 text-sm text-muted-foreground list-disc pl-5 space-y-1">
-              {files.map((f, i) => (
-                <li key={i}>
-                  {f.name} — {(f.size / 1024).toFixed(1)} KB
-                </li>
-              ))}
-            </ul>
+            <div className="mt-3 space-y-2">
+              {files.map((f, i) => {
+                const assignment = fileAssignments[i] ?? "";
+                const aiResult = aiResults[i];
+                return (
+                  <div key={i} className="border rounded p-3 space-y-2 bg-muted/30">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-medium truncate flex-1">
+                        {f.name}{" "}
+                        <span className="text-muted-foreground font-normal">
+                          ({(f.size / 1024).toFixed(1)} KB)
+                        </span>
+                      </div>
+                    </div>
+                    {ptype?.required_docs && ptype.required_docs.length > 0 && (
+                      <div>
+                        <label className="block text-xs text-muted-foreground mb-1">
+                          This file is:
+                        </label>
+                        <select
+                          className="border rounded-md p-1.5 text-sm w-full"
+                          value={assignment}
+                          onChange={(e) => handleAssignmentChange(i, e.target.value)}
+                        >
+                          <option value="">— Select document type —</option>
+                          {ptype.required_docs.map((doc) => (
+                            <option key={doc} value={doc}>
+                              {doc}
+                            </option>
+                          ))}
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                    )}
+                    {aiResult && (
+                      <div
+                        className={`text-xs rounded p-2 ${
+                          aiResult.match
+                            ? "bg-green-50 text-green-800 border border-green-200"
+                            : "bg-amber-50 text-amber-800 border border-amber-200"
+                        }`}
+                      >
+                        <span className="font-semibold">
+                          {aiResult.match ? "✓ AI Verified" : "⚠ AI Warning"}
+                        </span>{" "}
+                        — {aiResult.notes}
+                        {!aiResult.match && (
+                          <div className="mt-1 text-xs">
+                            File appears to be: <em>{aiResult.actual_type}</em>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
 
           {fileErrors.length > 0 && (

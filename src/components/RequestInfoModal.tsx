@@ -84,7 +84,7 @@ export function RequestInfoModal({
       // Update application status
       const { error: updateError } = await supabase
         .from("applications")
-        .update({ status: APPLICATION_STATUSES.NEEDS_INFO })
+        .update({ status: APPLICATION_STATUSES.CLARIFICATION_REQUESTED })
         .eq("id", applicationId);
 
       if (updateError) throw updateError;

@@ -222,11 +222,25 @@ export default function OwnedPermits() {
     }
   }
 
-  async function downloadFile(key: string) {
+  async function downloadFile(key: string, expectedSha256?: string | null) {
     try {
       const { data, error } = await supabase.storage.from("documents").download(key);
       if (error) throw error;
-      
+
+      // Verify integrity if we have an expected hash
+      if (expectedSha256) {
+        const { verifyIntegrity } = await import("@/lib/integrity");
+        const result = await verifyIntegrity(data, expectedSha256);
+        if (!result.ok) {
+          toast({
+            title: "Integrity check failed",
+            description: "Downloaded file's SHA-256 does not match the recorded hash. The file may have been tampered with. Download blocked.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       // Create a blob URL and trigger download
       const url = URL.createObjectURL(data);
       const link = document.createElement("a");
@@ -235,9 +249,16 @@ export default function OwnedPermits() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       // Clean up the blob URL
       setTimeout(() => URL.revokeObjectURL(url), BLOB_CLEANUP_DELAY);
+
+      if (expectedSha256) {
+        toast({
+          title: "Integrity verified",
+          description: "SHA-256 hash matches the recorded value.",
+        });
+      }
     } catch (e) {
       console.error(e);
       toast({
@@ -347,7 +368,7 @@ export default function OwnedPermits() {
                     <td className="px-3 py-2">
                       {permit?.pdf_s3_key ? (
                         <button
-                          onClick={() => downloadFile(permit.pdf_s3_key)}
+                          onClick={() => downloadFile(permit.pdf_s3_key, permit.pdf_sha256)}
                           className="px-3 py-1.5 border rounded text-xs"
                         >
                           Download
@@ -407,7 +428,7 @@ function DecisionDocsModal({
   loading: boolean;
   docs: DecisionDoc[];
   onClose: () => void;
-  download: (key: string) => void;
+  download: (key: string, expectedSha256?: string | null) => void;
 }) {
   return (
     <div
@@ -446,7 +467,7 @@ function DecisionDocsModal({
                     </div>
                   </div>
                   <button
-                    onClick={() => download(d.s3_key)}
+                    onClick={() => download(d.s3_key, d.sha256)}
                     className="px-2 py-1 border rounded text-xs"
                   >
                     Download

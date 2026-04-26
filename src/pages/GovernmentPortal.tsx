@@ -594,11 +594,11 @@ function DetailsModal({ id, onClose }: { id: string; onClose: () => void }) {
                 <Button
                   variant="outline"
                   onClick={() => setShowRequestInfoModal(true)}
-                  disabled={app?.status === APPLICATION_STATUSES.NEEDS_INFO}
+                  disabled={app?.status === APPLICATION_STATUSES.CLARIFICATION_REQUESTED}
                 >
                   Request Info
                 </Button>
-                {app?.status === APPLICATION_STATUSES.NEEDS_INFO && (
+                {app?.status === APPLICATION_STATUSES.CLARIFICATION_REQUESTED && (
                   <p className="text-xs text-orange-600 mt-2">
                     Information already requested for this application.
                   </p>
