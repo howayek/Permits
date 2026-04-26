@@ -143,7 +143,7 @@ Because the starting problem is a paper-first and trust-lacking workflow, GovSta
 - W10: Implement permit issuance proof-of-concept: generate a permit record, generate a simple PDF, and add a QR verification endpoint.
 - W11: Security hardening: add database authorization policies (RLS), audit logging, and secure storage access rules.
 - W12: Admin configuration v1: allow creating a permit type and defining required documents and review stages.
-- W13: Integration and bug fixes; add document integrity hashing (store/verify file hashes).
+- W13: Integration and bug fixes; add document integrity hashing (store/verify file hashes); integrate LLM-based document classification on upload and AI-assisted review summaries for government staff.
 - W14: Final demo preparation; performance/scalability notes; functional and security test plan execution.
 - W15: Buffer week for fixes and final submission.
 
@@ -160,7 +160,7 @@ For W12 (Admin Configuration), added RLS policies allowing government/admin user
 W11 (security hardening) and W12 (admin configuration v1) are complete. All milestones through W12 are on track.
 
 **Immediate next 2 weeks (W13–W14):**  
-Integration testing and bug fixes. Add document integrity verification on download. Prepare final demo, write up performance/scalability notes, and execute the functional and security test plan.
+Integration testing, bug fixes, and document integrity verification on download. Additionally, we will integrate LLM-based intelligent automation into the workflow: on document upload, an LLM will classify and validate uploaded files against the permit type's required documents list (e.g., confirming an uploaded file is actually an ID card and not an unrelated image); and in the reviewer portal, an AI-generated application summary will assist government staff by highlighting completeness, flagging missing documents, and surfacing key details—reducing manual review time while keeping the human reviewer as the final decision-maker. Prepare final demo, write up performance/scalability notes, and execute the functional and security test plan.
 
 **Plan changes due to findings:**  
 The security audit revealed that the original codebase had two inconsistent authorization systems: JWT-based `app_metadata` checks (set manually per user) and our `user_roles` table approach. We unified everything under `has_role()`, which queries the `user_roles` table. This is now the single source of truth for all RLS policies. The `permits` storage bucket was found to be unused (all files are stored in the `documents` bucket), so its demo policies were removed.
