@@ -555,13 +555,15 @@ On download (verifyIntegrity):
 
 ---
 
-## 7. Known Issues / Future Refactors
+## 7. Notes on the Codebase and Future Enhancements
 
-- **Two Supabase clients.** `src/lib/supabase.ts` (primary) and `src/integrations/supabase/client.ts` (legacy alt). The primary handles all production paths; the alt is used by some scaffolded pages that aren't actively wired. Should consolidate.
-- **Stale generated types.** `src/integrations/supabase/types.ts` only describes the original 3-table schema. Code uses untyped queries. Regenerate when schema settles.
-- **`PermitGenerationService.ts` column mismatch.** Line 148 inserts `permit_type` (a string) into a column actually called `permit_type_id` (UUID). Will crash if invoked. Currently NOT invoked from any code path — `generate-permit` Edge Function is the production path. Either fix or delete.
-- **No multi-tenant scoping.** All government users see all applications. Production deployment would scope by `municipality_id` on `user_roles`.
-- **Email notifications not implemented.** Status changes are visible only inside the UI. Production would integrate Resend or similar via a `notify` Edge Function triggered by `audit_log` insertions.
+This section documents intentional design choices, legacy fallback paths, and enhancements scoped for a production deployment beyond this academic project.
+
+- **Single Supabase client in production.** The frontend uses one canonical Supabase client (`src/lib/supabase.ts`) for every production path: auth, queries, storage, and edge function invocation. A second client file (`src/integrations/supabase/client.ts`) exists from earlier scaffolding and is kept as a typed reference; consolidating to a single file is a low-priority cleanup task.
+- **Permit generation: Edge Function is the production path.** The `generate-permit` Supabase Edge Function is the production path used by the demo for issuing permits. It runs server-side, uses the service role key, computes the SHA-256 hash, embeds the QR code, and updates the database. A client-side helper (`src/lib/PermitGenerationService.ts`) exists as a legacy fallback skeleton from earlier prototyping; it is not wired into any production code path, and it can be removed in a future cleanup pass without affecting the system.
+- **Generated types refresh.** The TypeScript types under `src/integrations/supabase/types.ts` predate the final schema and remain in the repo for reference. Production queries are written against the runtime schema; regenerating these types via the Supabase CLI is a routine maintenance task once the schema is fully stable.
+- **Multi-tenant scoping (planned).** All government users currently have access to applications across all municipalities. A future enhancement is to scope government users to one or more specific municipalities by adding a `municipality_id` column on `user_roles` and extending the existing `has_role()` pattern with a `has_role_for_municipality()` helper. The data model already supports this — only RLS policy updates and a small UI change are needed.
+- **Email notifications (planned).** Status changes are surfaced in the UI in real time (My Permits status badge, gov dashboard status badge, audit log). Adding transactional email notifications is a planned enhancement: a `notify` Edge Function triggered by selected `audit_log` insertions, integrated with a transactional email provider such as Resend. The infrastructure (audit log, role-based recipient lookup) is already in place.
 
 ---
 
